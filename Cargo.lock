@@ -21,6 +21,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.94"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1fd03a028ef38ba2276dce7e33fcd6369c158a1bca17946c4b1b701891c1ff7"
+
+[[package]]
 name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -141,6 +147,15 @@ dependencies = [
  "miniquad",
  "quad-rand",
  "slotmap",
+]
+
+[[package]]
+name = "macroquad-particles"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e79cc01adf3c3ed31bdb94e48062748335857d1f19993de6ca6e708c88b5a18"
+dependencies = [
+ "macroquad",
 ]
 
 [[package]]
@@ -283,7 +298,9 @@ checksum = "7b3e06c9b9d80ed6b745c7159c40b311ad2916abb34a49e9be2653b90db0d8dd"
 name = "uju"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "macroquad",
+ "macroquad-particles",
 ]
 
 [[package]]

@@ -2,8 +2,9 @@
 name = "uju"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.81"
 
 [dependencies]
+anyhow = "1.0"
 macroquad = "0.4"
-
-# cargo build --target wasm32-unknown-unknown
+macroquad-particles = "0.2"
