@@ -17,3 +17,10 @@ impl From<State> for &'static str {
         }
     }
 }
+
+impl std::fmt::Display for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s: &'static str = (*self).into();
+        write!(f, "{}", s)
+    }
+}

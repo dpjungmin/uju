@@ -1,7 +1,9 @@
+use std::time::Duration;
+
+use crate::periodic_timer::PeriodicTimer;
 use crate::state::State;
 
 use macroquad::prelude::*;
-use macroquad::ui::widgets::Window;
 use macroquad::ui::{hash, root_ui};
 use macroquad_particles::{AtlasConfig, BlendMode, ColorCurve, Emitter, EmitterConfig};
 
@@ -11,9 +13,13 @@ pub struct App {
     velocity: Vec2,
     rocket_texture: Texture2D,
     fire_emitter: Emitter,
-    draw_fire_emitter: bool,
     screen_size: Vec2,
     rocket_size: Vec2,
+    timer_1_hz: PeriodicTimer,
+    timer_10_hz: PeriodicTimer,
+    last_play_time: Option<f64>,
+    last_key_pressed_time: Option<f64>,
+    fps: i32,
 }
 
 impl App {
@@ -27,6 +33,7 @@ impl App {
             rocket_texture: load_texture("assets/rocket.png").await.unwrap(),
             fire_emitter: Emitter::new(EmitterConfig {
                 local_coords: false,
+                emitting: false,
                 texture: Some(load_texture("assets/smoke_fire.png").await.unwrap()),
                 lifetime: 0.4,
                 lifetime_randomness: 0.1,
@@ -43,9 +50,13 @@ impl App {
                 },
                 ..Default::default()
             }),
-            draw_fire_emitter: false,
             screen_size: vec2(screen_width(), screen_height()),
             rocket_size: vec2(100.0, 200.0),
+            timer_1_hz: PeriodicTimer::new(Duration::from_secs(1)),
+            timer_10_hz: PeriodicTimer::new(Duration::from_secs_f64(0.1)),
+            last_play_time: None,
+            last_key_pressed_time: None,
+            fps: get_fps(),
         }
     }
 
@@ -62,6 +73,17 @@ impl App {
     async fn dispatch(&mut self) {
         self.screen_size = vec2(screen_width(), screen_height());
 
+        if let Some(last_play_time) = self.last_play_time {
+            self.timer_1_hz
+                .update(Duration::from_secs_f64(get_time() - last_play_time));
+            self.timer_10_hz
+                .update(Duration::from_secs_f64(get_time() - last_play_time));
+        }
+
+        if self.timer_1_hz.triggered() {
+            self.fps = get_fps();
+        }
+
         match self.state {
             State::Init => {
                 self.state = State::Idle;
@@ -70,36 +92,57 @@ impl App {
                 let size = vec2(250.0, 50.0);
                 let position = self.screen_size / 2.0 - size / 2.0;
 
-                Window::new(hash!(), position, size).ui(&mut root_ui(), |ui| {
-                    ui.label(vec2(5.0, 5.0), "Press [space] to play!");
+                root_ui().window(hash!(), position, size, |ui| {
+                    ui.label(vec2(40.0, 15.0), "Press [space] to play");
 
                     if is_key_down(KeyCode::Space) {
                         self.state = State::Playing;
+                        self.last_key_pressed_time = Some(get_time());
                     }
                 });
             }
             State::Playing => {
-                self.draw_fire_emitter = true;
+                self.fire_emitter.config.emitting = true;
 
                 if is_key_down(KeyCode::Enter) {
                     self.state = State::Paused;
+                    self.last_key_pressed_time = Some(get_time());
                 }
+
+                if is_key_down(KeyCode::Tab) {
+                    // TODO: display help message
+                    self.last_key_pressed_time = Some(get_time());
+                }
+
+                // Apply gravity.
+                self.velocity.y += 0.05;
 
                 if is_key_down(KeyCode::Up) {
                     self.velocity.y -= 0.2;
+                    self.last_key_pressed_time = Some(get_time());
                 }
                 if is_key_down(KeyCode::Down) {
                     self.velocity.y += 0.2;
+                    self.last_key_pressed_time = Some(get_time());
                 }
                 if is_key_down(KeyCode::Left) {
                     self.velocity.x -= 0.2;
+                    self.last_key_pressed_time = Some(get_time());
                 }
                 if is_key_down(KeyCode::Right) {
                     self.velocity.x += 0.2;
+                    self.last_key_pressed_time = Some(get_time());
                 }
 
-                // Apply gravity
-                self.velocity.y += 0.05;
+                if let Some(last_key_pressed_time) = self.last_key_pressed_time {
+                    if (get_time() - last_key_pressed_time) > 1.0 && self.timer_10_hz.triggered() {
+                        if self.velocity.x < 0.0 {
+                            self.velocity.x = (self.velocity.x + 0.2).min(0.0);
+                        } else if self.velocity.x > 0.0 {
+                            self.velocity.x = (self.velocity.x - 0.2).max(0.0);
+                        }
+                    }
+                }
 
                 // Update position
                 self.position += self.velocity;
@@ -126,15 +169,18 @@ impl App {
                 let size = vec2(250.0, 50.0);
                 let position = self.screen_size / 2.0 - size / 2.0;
 
-                Window::new(hash!(), position, size).ui(&mut root_ui(), |ui| {
-                    ui.label(vec2(5.0, 5.0), "Press [space] to resume.");
+                root_ui().window(hash!(), position, size, |ui| {
+                    ui.label(vec2(40.0, 15.0), "Press [space] to resume");
 
                     if is_key_down(KeyCode::Space) {
                         self.state = State::Playing;
+                        self.last_key_pressed_time = Some(get_time());
                     }
                 });
             }
         }
+
+        self.last_play_time = Some(get_time());
 
         self.draw().await;
     }
@@ -142,8 +188,54 @@ impl App {
     async fn draw(&mut self) {
         clear_background(BLUE);
 
-        draw_text(self.state.into(), 10.0, 20.0, 15.0, WHITE);
-        draw_text(&format!("{:.2}", get_time()), 10.0, 40.0, 15.0, WHITE);
+        draw_text_ex(
+            format!("uptime: {:.2}", get_time()).as_str(),
+            10.0,
+            20.0,
+            TextParams {
+                font_size: 20,
+                color: BLACK,
+                ..Default::default()
+            },
+        );
+
+        draw_text_ex(
+            format!("FPS: {}", self.fps).as_str(),
+            10.0,
+            40.0,
+            TextParams {
+                font_size: 20,
+                color: BLACK,
+                ..Default::default()
+            },
+        );
+
+        draw_text_ex(
+            "press [enter] to pause",
+            10.0,
+            60.0,
+            TextParams {
+                font_size: 20,
+                color: BLACK,
+                ..Default::default()
+            },
+        );
+
+        draw_text_ex(
+            format!("state: {}", self.state).as_str(),
+            10.0,
+            80.0,
+            TextParams {
+                font_size: 20,
+                color: BLACK,
+                ..Default::default()
+            },
+        );
+
+        self.fire_emitter.draw(vec2(
+            self.position.x + (self.rocket_size.x / 2.0),
+            self.position.y - 10.0,
+        ));
 
         draw_texture_ex(
             &self.rocket_texture,
@@ -155,13 +247,6 @@ impl App {
                 ..Default::default()
             },
         );
-
-        if self.draw_fire_emitter {
-            self.fire_emitter.draw(vec2(
-                self.position.x + (self.rocket_size.x / 2.0),
-                self.position.y - 10.0,
-            ));
-        }
 
         next_frame().await;
     }
